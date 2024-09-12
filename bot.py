@@ -49,6 +49,8 @@ def start_processing_thread():
 def start_processing():
     save_credentials()
     file_path = file_entry.get()
+    if not file_path:
+        return None
     login = login_entry.get()
     password = password_entry.get()
 
@@ -97,8 +99,6 @@ def start_processing():
 
                 time.sleep(3)
 
-                # ----------------------------
-
                 iter_count = int(row['кибероны']) // 5
 
                 for _ in range(iter_count):
@@ -130,7 +130,6 @@ def start_processing():
 
                     time.sleep(1)
 
-                # ----------------------------
 
                 df.at[index, "кибероны"] = None
 
@@ -142,12 +141,8 @@ def start_processing():
             except:
                 print(f"Пользователь {row['фио']} не найден. Пропускаю.")
                 continue
-
+    df.to_excel(file_path, index=False)
     driver.quit()
-
-
-# Сохранение изменений обратно в Excel файл (если нужно)
-# df.to_excel(file_path, index=False)
 
 
 if __name__ == "__main__":
