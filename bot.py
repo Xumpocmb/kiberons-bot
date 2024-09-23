@@ -5,7 +5,9 @@ import os
 import gspread
 import threading
 import logging
-from tkinter import Tk, Label, Entry, Button, Checkbutton, IntVar, messagebox
+from tkinter import Tk, Label, Entry, Button, Checkbutton, IntVar, messagebox, filedialog
+
+from openpyxl.xml.constants import WORKSHEET_TYPE
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -17,27 +19,51 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 CREDENTIALS_FILE = 'credentials.json'
-GOOGLE_CREDENTIALS_FILE = 'endless-gasket-436505-j1-7b21e7342be7.json'
-SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1XU9SzrkQGtd6atfctJc8fNK5nA7MYbvtbQaBmGMCZz0'
+DEFAULT_GOOGLE_CREDENTIALS_FILE = 'google-credentials.json'
+DEFAULT_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1XU9SzrkQGtd6atfctJc8fNK5nA7MYbvtbQaBmGMCZz0'
+DEFAULT_WORKSHEET_NAME = 'кибероны боровки'
 
 
 class GoogleSheet:
-    def __init__(self, spreadsheet_url=SPREADSHEET_URL):
+    def __init__(self, spreadsheet_url: str = DEFAULT_SPREADSHEET_URL) -> None:
+        """
+        Initialize a GoogleSheet object.
+
+        :param spreadsheet_url: The URL of the Google Sheets spreadsheet to connect to.
+        :type spreadsheet_url: str
+        :return: None
+        :rtype: None
+        """
         try:
-            self.account = gspread.service_account(filename=GOOGLE_CREDENTIALS_FILE)
+            self.account = gspread.service_account(filename=google_credentials_file_entry.get())
             self.spreadsheet = self.account.open_by_url(spreadsheet_url)
             self.topics = {elem.title: elem.id for elem in self.spreadsheet.worksheets()}
-            self.answers = self.spreadsheet.get_worksheet_by_id(self.topics.get("кибероны боровки"))
+            if worksheet_name_entry.get() not in self.topics:
+                raise ValueError(f"Worksheet '{worksheet_name_entry.get()}' not found in spreadsheet")
+            self.answers = self.spreadsheet.get_worksheet_by_id(self.topics[worksheet_name_entry.get()])
             logging.info("Успешное подключение к Google Sheets")
         except Exception as e:
             logging.error(f"Ошибка подключения к Google Sheets: {e}")
             raise e
 
-    def load_data_from_google_sheet(self):
-        """Загружает данные из Google Sheets."""
+    def load_data_from_google_sheet(self) -> pd.DataFrame:
+        """
+        Загружает данные из Google Sheets.
+
+        :return: A Pandas DataFrame containing the data from the worksheet.
+        :rtype: pd.DataFrame
+        """
         try:
-            worksheet = self.spreadsheet.worksheet("кибероны боровки")
+            if not self.spreadsheet:
+                raise ValueError("Spreadsheet is not initialized")
+            if not self.topics:
+                raise ValueError("No topics found in the spreadsheet")
+            worksheet = self.spreadsheet.worksheet(worksheet_name_entry.get())
+            if not worksheet:
+                raise ValueError(f"Worksheet '{worksheet_name_entry.get()}' not found in spreadsheet")
             data = worksheet.get_all_records()
+            if not data:
+                raise ValueError("No data found in the worksheet")
             df = pd.DataFrame(data)
             logging.info("Данные успешно загружены из Google Sheets")
             return df
@@ -45,10 +71,23 @@ class GoogleSheet:
             logging.error(f"Ошибка загрузки данных из Google Sheets: {e}")
             raise e
 
-    def save_data_to_google_sheet(self, df):
-        """Сохраняет изменения обратно в Google Sheets."""
+    def save_data_to_google_sheet(self, df: pd.DataFrame) -> None:
+        """Saves the DataFrame to the specified worksheet in the Google Sheets.
+
+        Args:
+            df (pd.DataFrame): The DataFrame to save.
+
+        Returns:
+            None
+        """
         try:
-            worksheet = self.spreadsheet.worksheet("кибероны боровки")
+            if not self.spreadsheet:
+                raise ValueError("Spreadsheet is not initialized")
+            if not self.topics:
+                raise ValueError("No topics found in the spreadsheet")
+            worksheet = self.spreadsheet.worksheet(worksheet_name_entry.get())
+            if not worksheet:
+                raise ValueError(f"Worksheet '{worksheet_name_entry.get()}' not found in spreadsheet")
             worksheet.clear()
             worksheet.update([df.columns.values.tolist()] + df.values.tolist())
             logging.info("Данные успешно сохранены в Google Sheets")
@@ -57,15 +96,63 @@ class GoogleSheet:
             raise e
 
 
-def load_credentials():
-    """Загружает учетные данные из файла JSON."""
+def choose_google_credentials_file() -> None:
+    """Открывает диалог выбора файла для учетных данных Google.
+
+    :return: None
+    """
+    file_path = filedialog.askopenfilename(title="Выберите файл учетных данных Google",
+                                           filetypes=[("JSON files", "*.json")])
+    if file_path:
+        if google_credentials_file_entry is None:
+            raise ValueError("google_credentials_file is None")
+        google_credentials_file_entry.delete(0, 'end')
+        google_credentials_file_entry.insert(0, file_path)
+
+
+def load_credentials() -> None:
+    """
+    Loads credentials from a JSON file.
+
+    Tries to load the credentials from the file specified by `CREDENTIALS_FILE`.
+    If the file does not exist, does nothing.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     try:
         if os.path.exists(CREDENTIALS_FILE):
             with open(CREDENTIALS_FILE, 'r') as file:
-                data = json.load(file)
-                login_entry.insert(0, data.get("login", ""))
-                password_entry.insert(0, data.get("password", ""))
-                remember_var.set(data.get("remember", 0))
+                data: dict = json.load(file)
+                if data is None:
+                    raise ValueError("Loaded JSON is empty")
+                login = data.get("login")
+                if login is None:
+                    raise ValueError("JSON does not contain 'login' key")
+                login_entry.insert(0, login)
+                password = data.get("password")
+                if password is None:
+                    raise ValueError("JSON does not contain 'password' key")
+                password_entry.insert(0, password)
+                spreadsheet_url = data.get("spreadsheet_url")
+                if spreadsheet_url is None:
+                    raise ValueError("JSON does not contain 'spreadsheet_url' key")
+                spreadsheet_url_entry.insert(0, spreadsheet_url)
+                worksheet_name = data.get("worksheet_name")
+                if worksheet_name is None:
+                    raise ValueError("JSON does not contain 'worksheet_name' key")
+                worksheet_name_entry.insert(0, worksheet_name)
+                google_credentials_file = data.get("google_credentials_file")
+                if google_credentials_file is None:
+                    raise ValueError("JSON does not contain 'google_credentials_file' key")
+                google_credentials_file_entry.insert(0, google_credentials_file)
+                remember = data.get("remember")
+                if remember is None:
+                    raise ValueError("JSON does not contain 'remember' key")
+                remember_var.set(remember)
             logging.info("Учетные данные успешно загружены из JSON")
     except Exception as e:
         logging.error(f"Ошибка загрузки учетных данных: {e}")
@@ -78,6 +165,9 @@ def save_credentials():
             credentials = {
                 "login": login_entry.get(),
                 "password": password_entry.get(),
+                "spreadsheet_url": spreadsheet_url_entry.get(),
+                "worksheet_name": worksheet_name_entry.get(),
+                "google_credentials_file": google_credentials_file_entry.get(),
                 "remember": remember_var.get()
             }
             with open(CREDENTIALS_FILE, 'w') as file:
@@ -91,20 +181,55 @@ def save_credentials():
         logging.error(f"Ошибка сохранения учетных данных: {e}")
 
 
-def init_driver():
-    """Инициализирует и возвращает объект Selenium WebDriver."""
+def init_driver() -> webdriver.Chrome:
+    """Инициализирует и возвращает объект Selenium WebDriver типа webdriver.Chrome.
+
+    Returns:
+        webdriver.Chrome: Инициализированный объект WebDriver.
+    """
     try:
-        service = Service('chromedriver-win64/chromedriver.exe')
-        options = webdriver.ChromeOptions()
+        if not os.path.exists('chromedriver-win64/chromedriver.exe'):
+            logging.error("chromedriver.exe could not be found.")
+            raise FileNotFoundError("chromedriver.exe could not be found.")
+        service: Service = Service('chromedriver-win64/chromedriver.exe')
+        if not service:
+            logging.error("Service could not be created.")
+            raise RuntimeError("Service could not be created.")
+        options: webdriver.ChromeOptions = webdriver.ChromeOptions()
+        driver: webdriver.Chrome = webdriver.Chrome(service=service, options=options)
+        if not driver:
+            logging.error("Driver could not be created.")
+            raise RuntimeError("Driver could not be created.")
         logging.info("WebDriver успешно инициализирован")
-        return webdriver.Chrome(service=service, options=options)
-    except Exception as e:
+        return driver
+    except FileNotFoundError as e:
+        logging.error(f"Ошибка инициализации WebDriver: {e}")
+        raise e
+    except RuntimeError as e:
         logging.error(f"Ошибка инициализации WebDriver: {e}")
         raise e
 
 
-def login_to_site(driver, login, password):
-    """Выполняет вход на сайт с указанными логином и паролем."""
+def login_to_site(driver: webdriver.Chrome, login: str, password: str) -> bool:
+    """
+    Выполняет вход на сайт с указанными логином и паролем.
+
+    Args:
+        driver (webdriver.Chrome): Инициализированный объект WebDriver.
+        login (str): Логин для входа на сайт.
+        password (str): Пароль для входа на сайт.
+
+    Returns:
+        bool: True, если вход выполнен успешно, False - в противном случае.
+    """
+    if not driver:
+        logging.error("Driver is null")
+        messagebox.showerror("Ошибка входа", "Driver is null")
+        return False
+    if not login or not password:
+        logging.error("Login or password is null or empty")
+        messagebox.showerror("Ошибка входа", "Login or password is null or empty")
+        return False
     try:
         driver.get('https://kiber-one.club/')
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, 'login')))
@@ -166,7 +291,7 @@ def process_user(driver, row):
         return False
 
 
-def start_processing():
+def start_processing() -> None:
     """Основная логика обработки данных."""
     save_credentials()
 
@@ -175,10 +300,13 @@ def start_processing():
 
         df = google_sheet.load_data_from_google_sheet()
 
+        if df is None:
+            raise ValueError("No data loaded from Google Sheet")
+
         driver = init_driver()
 
-        login = login_entry.get()
-        password = password_entry.get()
+        login: str = login_entry.get()
+        password: str = password_entry.get()
 
         if not login_to_site(driver, login, password):
             return
@@ -189,8 +317,8 @@ def start_processing():
         for index, row in df.iterrows():
             if pd.notna(row["фио"]):
                 try:
-                    kiberony_value = float(row["кибероны"])
-                    if kiberony_value > 0:
+                    kiberones_value: float = float(row["кибероны"])
+                    if kiberones_value > 0:
                         logging.info(f"Начинается обработка для пользователя: {row['фио']}")
                         if process_user(driver, row):
                             df.at[index, "кибероны"] = None
@@ -203,9 +331,10 @@ def start_processing():
             else:
                 logging.info(f"Пропущена строка: ФИО отсутствует (ФИО: {row.get('фио', 'пусто')})")
 
-        google_sheet.save_data_to_google_sheet(df)
-        logging.info("Обработка завершена успешно")
-        messagebox.showinfo("Завершено", "Обработка завершена успешно.")
+        if df is not None:
+            google_sheet.save_data_to_google_sheet(df)
+            logging.info("Обработка завершена успешно")
+            messagebox.showinfo("Завершено", "Обработка завершена успешно.")
     except Exception as e:
         logging.error(f"Ошибка во время обработки: {e}")
         messagebox.showerror("Ошибка", f"Произошла ошибка во время обработки: {e}")
@@ -213,49 +342,77 @@ def start_processing():
         driver.quit()
 
 
+def start_processing_thread() -> None:
+    """Запускает процесс обработки данных в отдельном потоке.
 
+    Args:
+        None
 
-def start_processing_thread():
-    """Запускает процесс обработки данных в отдельном потоке."""
-    threading.Thread(target=start_processing).start()
+    Returns:
+        None
+    """
+    try:
+        threading.Thread(target=start_processing).start()
+    except Exception as e:
+        logging.error("Ошибка при запуске потока обработки: %s", e)
 
 
 if __name__ == "__main__":
     root = Tk()
     root.title("KIBER Club - Бот для начисления Киберонов")
 
-    def center_window(window, width=400, height=300):
-        screen_width = window.winfo_screenwidth()
-        screen_height = window.winfo_screenheight()
-        x = (screen_width // 2) - (width // 2)
-        y = (screen_height // 2) - (height // 2)
-        window.geometry(f'{width}x{height}+{x}+{y}')
+
+    def center_window(window):
+        window.update_idletasks()  # Обновить размеры
+        window_width = window.winfo_width() + 20  # Добавить немного отступа
+        window_height = window.winfo_height() + 20
+        x = (window.winfo_screenwidth() // 2) - (window_width // 2)
+        y = (window.winfo_screenheight() // 2) - (window_height // 2)
+        window.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
     root.grid_columnconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=1)
     root.grid_rowconfigure(0, weight=1)
-    root.grid_rowconfigure(5, weight=1)
+    root.grid_rowconfigure(6, weight=1)
 
     login_label = Label(root, text="Логин:")
     login_label.grid(row=1, column=0, sticky="e", padx=10)
-    login_entry = Entry(root)
+    login_entry = Entry(root, width=20)
     login_entry.grid(row=1, column=1, padx=10)
 
     password_label = Label(root, text="Пароль:")
     password_label.grid(row=2, column=0, sticky="e", padx=10)
-    password_entry = Entry(root, show="*")
+    password_entry = Entry(root, show="*", width=20)
     password_entry.grid(row=2, column=1, padx=10)
+
+    spreadsheet_url_label = Label(root, text="Ссылка на таблицу:")
+    spreadsheet_url_label.grid(row=3, column=0, sticky="e", padx=10)
+    spreadsheet_url_entry = Entry(root, width=80)
+    spreadsheet_url_entry.grid(row=3, column=1, padx=10)
+
+    worksheet_name_label = Label(root, text="Название листа:")
+    worksheet_name_label.grid(row=4, column=0, sticky="e", padx=10)
+    worksheet_name_entry = Entry(root, width=80)
+    worksheet_name_entry.grid(row=4, column=1, padx=10)
+
+    google_credentials_file_label = Label(root, text="Путь к файлу учетных данных:")
+    google_credentials_file_label.grid(row=5, column=0, sticky="e", padx=10)
+    google_credentials_file_entry = Entry(root, width=80)
+    google_credentials_file_entry.grid(row=5, column=1, padx=10)
+
+    choose_file_button = Button(root, text="Выбрать файл", command=choose_google_credentials_file)
+    choose_file_button.grid(row=5, column=2, padx=10)
 
     remember_var = IntVar()
     remember_checkbutton = Checkbutton(root, text="Запомнить", variable=remember_var)
-    remember_checkbutton.grid(row=3, column=0, columnspan=2, pady=10)
+    remember_checkbutton.grid(row=6, column=0, columnspan=2, pady=10)
 
     start_button = Button(root, text="Начать", command=start_processing_thread)
-    start_button.grid(row=4, column=0, columnspan=2, pady=20)
+    start_button.grid(row=7, column=0, columnspan=2, pady=20)
 
     load_credentials()
 
-    root.update_idletasks()
-    center_window(root, width=400, height=300)
+    center_window(root)
 
     root.mainloop()
+
