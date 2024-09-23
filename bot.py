@@ -1,20 +1,19 @@
-import time
-import pandas as pd
 import json
-import os
-import gspread
-import threading
 import logging
+import os
+import threading
+import time
 from tkinter import Tk, Label, Entry, Button, Checkbutton, IntVar, messagebox, filedialog
 
-from openpyxl.xml.constants import WORKSHEET_TYPE
+import gspread
+import pandas as pd
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait, Select
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait, Select
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -31,8 +30,7 @@ class GoogleSheet:
 
         :param spreadsheet_url: The URL of the Google Sheets spreadsheet to connect to.
         :type spreadsheet_url: str
-        :return: None
-        :rtype: None
+        :return: None        :rtype: None
         """
         try:
             self.account = gspread.service_account(filename=google_credentials_file_entry.get())
@@ -116,9 +114,6 @@ def load_credentials() -> None:
 
     Tries to load the credentials from the file specified by `CREDENTIALS_FILE`.
     If the file does not exist, does nothing.
-
-    Args:
-        None
 
     Returns:
         None
@@ -214,11 +209,6 @@ def login_to_site(driver: webdriver.Chrome, login: str, password: str) -> bool:
     """
     Выполняет вход на сайт с указанными логином и паролем.
 
-    Args:
-        driver (webdriver.Chrome): Инициализированный объект WebDriver.
-        login (str): Логин для входа на сайт.
-        password (str): Пароль для входа на сайт.
-
     Returns:
         bool: True, если вход выполнен успешно, False - в противном случае.
     """
@@ -249,31 +239,37 @@ def login_to_site(driver: webdriver.Chrome, login: str, password: str) -> bool:
 def process_user(driver, row):
     """Обрабатывает каждого пользователя в таблице."""
     try:
-        search_field = driver.find_element(By.XPATH, '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[2]/input')
+        search_field = driver.find_element(By.XPATH,
+                                           '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[2]/input')
         search_field.clear()
         search_field.send_keys(row['фио'])
         time.sleep(3)
 
-        user_item = driver.find_element(By.XPATH, '//div[contains(@class, "user_item") and @style="display: table-row;"]')
+        user_item = driver.find_element(By.XPATH,
+                                        '//div[contains(@class, "user_item") and @style="display: table-row;"]')
         user_item.find_element(By.TAG_NAME, 'a').click()
 
         time.sleep(2)
         iter_count = int(row['кибероны']) // 5
 
         for _ in range(iter_count):
-            button_change_kiberons = driver.find_element(By.XPATH, '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[1]/div[1]/span/span')
+            button_change_kiberons = driver.find_element(By.XPATH,
+                                                         '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[1]/div[1]/span/span')
             button_change_kiberons.click()
 
-            select1 = Select(WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_sign_id"))))
+            select1 = Select(
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_sign_id"))))
             select1.select_by_visible_text("Начисление")
 
-            select2 = Select(WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_cause_id"))))
+            select2 = Select(
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_cause_id"))))
             select2.select_by_index(4)
 
             save_button = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "sendsave")))
             save_button.click()
 
-            close_modal_element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "uss_modal_close")))
+            close_modal_element = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "uss_modal_close")))
             close_modal_element.click()
 
             time.sleep(2)
@@ -294,7 +290,7 @@ def process_user(driver, row):
 def start_processing() -> None:
     """Основная логика обработки данных."""
     save_credentials()
-
+    driver: WebDriver | None = None
     try:
         google_sheet = GoogleSheet()
 
@@ -303,7 +299,7 @@ def start_processing() -> None:
         if df is None:
             raise ValueError("No data loaded from Google Sheet")
 
-        driver = init_driver()
+        driver: WebDriver = init_driver()
 
         login: str = login_entry.get()
         password: str = password_entry.get()
@@ -339,14 +335,12 @@ def start_processing() -> None:
         logging.error(f"Ошибка во время обработки: {e}")
         messagebox.showerror("Ошибка", f"Произошла ошибка во время обработки: {e}")
     finally:
-        driver.quit()
+        if driver is not None:
+            driver.quit()
 
 
 def start_processing_thread() -> None:
     """Запускает процесс обработки данных в отдельном потоке.
-
-    Args:
-        None
 
     Returns:
         None
@@ -362,13 +356,28 @@ if __name__ == "__main__":
     root.title("KIBER Club - Бот для начисления Киберонов")
 
 
-    def center_window(window):
+    def center_window(window: Tk) -> None:
+        """
+        Центрирует окно на экране.
+
+        :param window: Окно, которое нужно центрировать
+        :type window: Tk
+        :return: None
+        """
+        if window is None:
+            raise ValueError("Window is None")
+
         window.update_idletasks()  # Обновить размеры
         window_width = window.winfo_width() + 20  # Добавить немного отступа
         window_height = window.winfo_height() + 20
         x = (window.winfo_screenwidth() // 2) - (window_width // 2)
         y = (window.winfo_screenheight() // 2) - (window_height // 2)
+
+        if window_width <= 0 or window_height <= 0:
+            raise ValueError("Window size is invalid")
+
         window.geometry(f'{window_width}x{window_height}+{x}+{y}')
+
 
     root.grid_columnconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=1)
@@ -415,4 +424,3 @@ if __name__ == "__main__":
     center_window(root)
 
     root.mainloop()
-
