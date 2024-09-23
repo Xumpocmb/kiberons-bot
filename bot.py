@@ -3,7 +3,7 @@ import logging
 import os
 import threading
 import time
-from tkinter import Tk, Label, Entry, Button, Checkbutton, IntVar, messagebox, filedialog
+from tkinter import Tk, Label, Entry, Button, Checkbutton, IntVar, messagebox, filedialog, StringVar
 
 import gspread
 import pandas as pd
@@ -18,39 +18,38 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 CREDENTIALS_FILE = 'credentials.json'
-DEFAULT_GOOGLE_CREDENTIALS_FILE = 'google-credentials.json'
-DEFAULT_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1XU9SzrkQGtd6atfctJc8fNK5nA7MYbvtbQaBmGMCZz0'
-DEFAULT_WORKSHEET_NAME = 'кибероны боровки'
 
 
 class GoogleSheet:
-    def __init__(self, spreadsheet_url: str = DEFAULT_SPREADSHEET_URL) -> None:
+    def __init__(self, google_credentials_file: str, spreadsheet_url: str, worksheet_name: str) -> None:
         """
         Initialize a GoogleSheet object.
 
+        :param google_credentials_file: The path to the Google credentials JSON file.
+        :type google_credentials_file: str
         :param spreadsheet_url: The URL of the Google Sheets spreadsheet to connect to.
         :type spreadsheet_url: str
-        :return: None        :rtype: None
+        :param worksheet_name: The name of the worksheet to access.
+        :type worksheet_name: str
+        :return: None
+        :rtype: None
         """
         try:
-            self.account = gspread.service_account(filename=google_credentials_file_entry.get())
+            self.account = gspread.service_account(filename=google_credentials_file)
             self.spreadsheet = self.account.open_by_url(spreadsheet_url)
             self.topics = {elem.title: elem.id for elem in self.spreadsheet.worksheets()}
-            if worksheet_name_entry.get() not in self.topics:
-                raise ValueError(f"Worksheet '{worksheet_name_entry.get()}' not found in spreadsheet")
-            self.answers = self.spreadsheet.get_worksheet_by_id(self.topics[worksheet_name_entry.get()])
+            if worksheet_name not in self.topics:
+                raise ValueError(f"Worksheet '{worksheet_name}' not found in spreadsheet")
+            self.answers = self.spreadsheet.get_worksheet_by_id(self.topics[worksheet_name])
             logging.info("Успешное подключение к Google Sheets")
+            update_status("Успешное подключение к Google Sheets")
         except Exception as e:
             logging.error(f"Ошибка подключения к Google Sheets: {e}")
+            update_status(f"Ошибка подключения к Google Sheets: {e}")
             raise e
 
     def load_data_from_google_sheet(self) -> pd.DataFrame:
-        """
-        Загружает данные из Google Sheets.
-
-        :return: A Pandas DataFrame containing the data from the worksheet.
-        :rtype: pd.DataFrame
-        """
+        """Загружает данные из Google Sheets."""
         try:
             if not self.spreadsheet:
                 raise ValueError("Spreadsheet is not initialized")
@@ -70,14 +69,7 @@ class GoogleSheet:
             raise e
 
     def save_data_to_google_sheet(self, df: pd.DataFrame) -> None:
-        """Saves the DataFrame to the specified worksheet in the Google Sheets.
-
-        Args:
-            df (pd.DataFrame): The DataFrame to save.
-
-        Returns:
-            None
-        """
+        """Сохраняет DataFrame в указанный лист Google Sheets."""
         try:
             if not self.spreadsheet:
                 raise ValueError("Spreadsheet is not initialized")
@@ -95,62 +87,37 @@ class GoogleSheet:
 
 
 def choose_google_credentials_file() -> None:
-    """Открывает диалог выбора файла для учетных данных Google.
-
-    :return: None
-    """
+    """Открывает диалог выбора файла для учетных данных Google."""
     file_path = filedialog.askopenfilename(title="Выберите файл учетных данных Google",
                                            filetypes=[("JSON files", "*.json")])
     if file_path:
-        if google_credentials_file_entry is None:
-            raise ValueError("google_credentials_file is None")
         google_credentials_file_entry.delete(0, 'end')
         google_credentials_file_entry.insert(0, file_path)
 
 
 def load_credentials() -> None:
-    """
-    Loads credentials from a JSON file.
-
-    Tries to load the credentials from the file specified by `CREDENTIALS_FILE`.
-    If the file does not exist, does nothing.
-
-    Returns:
-        None
-    """
+    """Loads credentials from a JSON file."""
     try:
         if os.path.exists(CREDENTIALS_FILE):
             with open(CREDENTIALS_FILE, 'r') as file:
                 data: dict = json.load(file)
-                if data is None:
-                    raise ValueError("Loaded JSON is empty")
                 login = data.get("login")
-                if login is None:
-                    raise ValueError("JSON does not contain 'login' key")
                 login_entry.insert(0, login)
                 password = data.get("password")
-                if password is None:
-                    raise ValueError("JSON does not contain 'password' key")
                 password_entry.insert(0, password)
                 spreadsheet_url = data.get("spreadsheet_url")
-                if spreadsheet_url is None:
-                    raise ValueError("JSON does not contain 'spreadsheet_url' key")
                 spreadsheet_url_entry.insert(0, spreadsheet_url)
                 worksheet_name = data.get("worksheet_name")
-                if worksheet_name is None:
-                    raise ValueError("JSON does not contain 'worksheet_name' key")
                 worksheet_name_entry.insert(0, worksheet_name)
                 google_credentials_file = data.get("google_credentials_file")
-                if google_credentials_file is None:
-                    raise ValueError("JSON does not contain 'google_credentials_file' key")
                 google_credentials_file_entry.insert(0, google_credentials_file)
                 remember = data.get("remember")
-                if remember is None:
-                    raise ValueError("JSON does not contain 'remember' key")
                 remember_var.set(remember)
             logging.info("Учетные данные успешно загружены из JSON")
+            update_status("Учетные данные успешно загружены из JSON")
     except Exception as e:
         logging.error(f"Ошибка загрузки учетных данных: {e}")
+        update_status(f"Ошибка загрузки учетных данных: {e}")
 
 
 def save_credentials():
@@ -168,12 +135,15 @@ def save_credentials():
             with open(CREDENTIALS_FILE, 'w') as file:
                 json.dump(credentials, file)
             logging.info("Учетные данные успешно сохранены в JSON")
+            update_status("Учетные данные успешно сохранены в JSON")
         else:
             if os.path.exists(CREDENTIALS_FILE):
                 os.remove(CREDENTIALS_FILE)
-                logging.info("Файл учетных данных удален")
+                logging.info("Файл учетных данных удален либо не найден")
+                update_status("Файл учетных данных удален либо не найден")
     except Exception as e:
         logging.error(f"Ошибка сохранения учетных данных: {e}")
+        update_status(f"Ошибка сохранения учетных данных: {e}")
 
 
 def init_driver() -> webdriver.Chrome:
@@ -228,9 +198,11 @@ def login_to_site(driver: webdriver.Chrome, login: str, password: str) -> bool:
         driver.find_element(By.XPATH, '//*[@id="loginForm"]/table/tbody/tr[4]/td/input').click()
         WebDriverWait(driver, 10).until(EC.url_changes('https://kiber-one.club/'))
         logging.info("Успешный вход на сайт")
+        update_status("Успешный вход на сайт")
         return True
     except (NoSuchElementException, TimeoutException) as e:
         logging.error(f"Ошибка входа на сайт: {e}")
+        update_status(f"Ошибка входа на сайт: {e}")
         messagebox.showerror("Ошибка входа", f"Не удалось войти на сайт: {e}")
         driver.quit()
         return False
@@ -275,6 +247,7 @@ def process_user(driver, row):
             time.sleep(2)
 
         logging.info(f"Кибероны успешно начислены для пользователя: {row['фио']}")
+        update_status(f"Кибероны успешно начислены для пользователя: {row['фио']}")
 
         row["кибероны"] = None
         driver.back()
@@ -292,7 +265,8 @@ def start_processing() -> None:
     save_credentials()
     driver: WebDriver | None = None
     try:
-        google_sheet = GoogleSheet()
+        update_status("Начинается обработка данных...")
+        google_sheet = GoogleSheet(google_credentials_file, spreadsheet_url, worksheet_name)
 
         df = google_sheet.load_data_from_google_sheet()
 
@@ -308,7 +282,7 @@ def start_processing() -> None:
             return
 
         driver.find_element(By.XPATH, '/html/body/div[1]/div/div/div/div/div[1]/div/div[2]/div[1]/a').click()
-        time.sleep(2)
+        time.sleep(3)
 
         for index, row in df.iterrows():
             if pd.notna(row["фио"]):
@@ -316,23 +290,28 @@ def start_processing() -> None:
                     kiberones_value: float = float(row["кибероны"])
                     if kiberones_value > 0:
                         logging.info(f"Начинается обработка для пользователя: {row['фио']}")
+                        update_status(f"Начинается обработка для пользователя: {row['фио']}")
                         if process_user(driver, row):
                             df.at[index, "кибероны"] = None
                         else:
                             logging.warning(f"Не удалось обработать пользователя: {row['фио']}")
+                            update_status(f"Не удалось обработать пользователя: {row['фио']}")
                     else:
                         logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными киберонами.")
                 except ValueError:
                     logging.warning(f"Неверное значение киберонов для пользователя {row['фио']}: {row['кибероны']}")
             else:
                 logging.info(f"Пропущена строка: ФИО отсутствует (ФИО: {row.get('фио', 'пусто')})")
+            time.sleep(2)
 
         if df is not None:
             google_sheet.save_data_to_google_sheet(df)
             logging.info("Обработка завершена успешно")
+            update_status("Обработка завершена успешно")
             messagebox.showinfo("Завершено", "Обработка завершена успешно.")
     except Exception as e:
         logging.error(f"Ошибка во время обработки: {e}")
+        update_status(f"Ошибка во время обработки: {e}")
         messagebox.showerror("Ошибка", f"Произошла ошибка во время обработки: {e}")
     finally:
         if driver is not None:
@@ -354,6 +333,12 @@ def start_processing_thread() -> None:
 if __name__ == "__main__":
     root = Tk()
     root.title("KIBER Club - Бот для начисления Киберонов")
+
+    status_message = StringVar()
+
+
+    def update_status(message: str) -> None:
+        status_message.set(message)
 
 
     def center_window(window: Tk) -> None:
@@ -419,7 +404,14 @@ if __name__ == "__main__":
     start_button = Button(root, text="Начать", command=start_processing_thread)
     start_button.grid(row=7, column=0, columnspan=2, pady=20)
 
+    status_label = Label(root, textvariable=status_message, relief="sunken", anchor="w")
+    status_label.grid(row=8, column=0, columnspan=3, sticky="ew")
+
     load_credentials()
+
+    google_credentials_file = google_credentials_file_entry.get()
+    spreadsheet_url = spreadsheet_url_entry.get()
+    worksheet_name = worksheet_name_entry.get()
 
     center_window(root)
 
