@@ -293,6 +293,7 @@ def start_processing() -> None:
                         update_status(f"Начинается обработка для пользователя: {row['фио']}")
                         if process_user(driver, row):
                             df.at[index, "кибероны"] = None
+                            time.sleep(2)
                         else:
                             logging.warning(f"Не удалось обработать пользователя: {row['фио']}")
                             update_status(f"Не удалось обработать пользователя: {row['фио']}")
@@ -302,7 +303,7 @@ def start_processing() -> None:
                     logging.warning(f"Неверное значение киберонов для пользователя {row['фио']}: {row['кибероны']}")
             else:
                 logging.info(f"Пропущена строка: ФИО отсутствует (ФИО: {row.get('фио', 'пусто')})")
-            time.sleep(2)
+
 
         if df is not None:
             google_sheet.save_data_to_google_sheet(df)
