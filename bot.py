@@ -222,7 +222,7 @@ def process_user(driver, row):
         user_item.find_element(By.TAG_NAME, 'a').click()
 
         time.sleep(1)
-        iter_count = row['кибероны'] // 5
+        iter_count = row['активность'] // 5
 
         for _ in range(iter_count):
             button_change_kiberons = driver.find_element(By.XPATH,
@@ -361,12 +361,12 @@ def start_processing() -> None:
         for index, row in df.iterrows():
             if pd.notna(row["фио"]):
                 try:
-                    kiberones_value: float = float(row["кибероны"])
+                    kiberones_value: float = float(row["активность"])
                     if kiberones_value > 0:
                         logging.info(f"Начинается начисление киберонов для пользователя: {row['фио']}")
                         update_status(f"Начинается начисление киберонов для пользователя: {row['фио']}")
                         if process_user(driver, row):
-                            df.at[index, "кибероны"] = None
+                            df.at[index, "активность"] = None
                             google_sheet.save_data_to_google_sheet(df)
                             time.sleep(2)
                         else:
@@ -375,7 +375,7 @@ def start_processing() -> None:
                     else:
                         logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными киберонами.")
                 except ValueError:
-                    logging.warning(f"Неверное значение киберонов для пользователя {row['фио']}: {row['кибероны']}")
+                    logging.warning(f"Неверное значение киберонов для пользователя {row['фио']}: {row['активность']}")
             else:
                 logging.info(f"Пропущена строка: ФИО отсутствует (ФИО: {row.get('фио', 'пусто')})")
 
