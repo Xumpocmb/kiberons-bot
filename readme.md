@@ -22,7 +22,7 @@
 
 1. Клонируйте этот репозиторий или скачайте файлы:
    ```bash
-   git clone https://github.com/ваш-проект-url.git
+   git clone https://github.com/url.git
    cd ваш-проект
 
 2. Установите необходимые зависимости:
