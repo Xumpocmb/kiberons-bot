@@ -15,7 +15,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait, Select
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s - %(lineno)d - %(message)s'
+)
 
 CREDENTIALS_FILE = 'credentials.json'
 
@@ -208,74 +211,97 @@ def login_to_site(driver: webdriver.Chrome, login: str, password: str) -> bool:
         return False
 
 
-def activity_bonus(driver, row):
-    """Обрабатывает пользователя в таблице."""
+def find_and_open_user(driver, row) -> bool:
+    """Функция поиска и открытия профиля пользователя"""
     try:
-        search_field = driver.find_element(By.XPATH,
-                                           '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[2]/input')
+        search_field = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[2]/input'))
+        )
         search_field.clear()
         search_field.send_keys(row['фио'])
-        time.sleep(1)
 
-        user_item = driver.find_element(By.XPATH,
-                                        '//div[contains(@class, "user_item") and @style="display: table-row;"]')
+        user_item = WebDriverWait(driver, 1).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '//div[contains(@class, "user_item") and @style="display: table-row;"]'))
+        )
         user_item.find_element(By.TAG_NAME, 'a').click()
-
-        time.sleep(1)
-        iter_count = row['активность'] // 5
-
-        for _ in range(iter_count):
-            button_change_kiberons = driver.find_element(By.XPATH,
-                                                         '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[1]/div[1]/span/span')
-            button_change_kiberons.click()
-
-            select1 = Select(
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_sign_id"))))
-            select1.select_by_visible_text("Начисление")
-
-            select2 = Select(
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_cause_id"))))
-            select2.select_by_index(4)
-
-            save_button = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "sendsave")))
-            save_button.click()
-
-            close_modal_element = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "uss_modal_close")))
-            close_modal_element.click()
-
-            time.sleep(1)
-
-        logging.info(f"Кибероны успешно начислены для пользователя: {row['фио']}")
-        update_status(f"Кибероны успешно начислены для пользователя: {row['фио']}")
-
-        driver.back()
-        time.sleep(2)
-        driver.refresh()
-
         return True
+
+    except (NoSuchElementException, TimeoutException):
+        update_status("Не удалось найти пользователя или элементы поиска не загрузились")
+        logging.error("Не удалось найти пользователя или элементы поиска не загрузились")
+        return False
+
+
+def activity_bonus(driver, row) -> bool:
+    """Обрабатывает пользователя в таблице."""
+    try:
+        if find_and_open_user(driver, row):
+            iter_count = row['активность'] // 5
+            for _ in range(iter_count):
+                apply_bonus(driver, 4)
+            logging.info(f"Кибероны успешно начислены для пользователя: {row['фио']}")
+            update_status(f"Кибероны успешно начислены для пользователя: {row['фио']}")
+            driver.back()
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*')))
+            driver.refresh()
+            return True
+        else:
+            logging.info(f"Не удалось найти пользователя: {row['фио']}")
+            update_status(f"Не удалось найти пользователя: {row['фио']}")
+            return False
     except (NoSuchElementException, TimeoutException) as e:
         logging.error(f"Ошибка при обработке пользователя {row['фио']}: {e}")
         return False
 
 
-def other_bonus(driver, row, index):
-    """Обрабатывает пользователя в таблице."""
+def other_bonus(driver, row, index) -> bool:
+    """Обрабатывает остальные бонусы"""
     try:
-        search_field = driver.find_element(By.XPATH,
-                                           '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[2]/input')
-        search_field.clear()
-        search_field.send_keys(row['фио'])
-        time.sleep(1)
+        if find_and_open_user(driver, row):
+            apply_bonus(driver, index)
+            logging.info(f"Бонусные кибероны успешно начислены для пользователя: {row['фио']}")
+            update_status(f"Бонусные кибероны успешно начислены для пользователя: {row['фио']}")
+            driver.back()
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*')))
+            driver.refresh()
+            return True
+        else:
+            logging.info(f"Не удалось найти пользователя: {row['фио']}")
+            update_status(f"Не удалось найти пользователя: {row['фио']}")
+            return False
+    except (NoSuchElementException, TimeoutException) as e:
+        logging.error(f"Ошибка при обработке бонуса {row['фио']}: {e}")
+        return False
 
-        user_item = driver.find_element(By.XPATH,
-                                        '//div[contains(@class, "user_item") and @style="display: table-row;"]')
-        user_item.find_element(By.TAG_NAME, 'a').click()
 
-        time.sleep(1)
+def process_penalty(driver, row) -> bool:
+    """Запускает процесс обработки штрафов."""
+    try:
+        if find_and_open_user(driver, row):
+            apply_penalty(driver, row)
+            logging.info(f"Штраф успешно начислены для пользователя: {row['фио']}")
+            update_status(f"Штраф успешно начислены для пользователя: {row['фио']}")
+            driver.back()
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*')))
+            driver.refresh()
+            return True
+        else:
+            logging.info(f"Не удалось найти пользователя: {row['фио']}")
+            update_status(f"Не удалось найти пользователя: {row['фио']}")
+            return False
+    except (NoSuchElementException, TimeoutException) as e:
+        logging.error(f"Ошибка при обработке пользователя {row['фио']}: {e}")
+        return False
+
+
+def apply_bonus(driver, index) -> bool:
+    try:
         button_change_kiberons = driver.find_element(By.XPATH,
                                                      '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[1]/div[1]/span/span')
         button_change_kiberons.click()
+
         select1 = Select(
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_sign_id"))))
         select1.select_by_visible_text("Начисление")
@@ -283,59 +309,42 @@ def other_bonus(driver, row, index):
         select2 = Select(
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_cause_id"))))
         select2.select_by_index(index)
-        time.sleep(0.3)
+
         save_button = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "sendsave")))
         save_button.click()
 
-        logging.info(f"Кибероны за ДЗ успешно начислены для пользователя: {row['фио']}")
-        update_status(f"Кибероны за ДЗ успешно начислены для пользователя: {row['фио']}")
+        close_modal_element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "uss_modal_close")))
+        close_modal_element.click()
 
-        time.sleep(1)
-        driver.back()
-        time.sleep(2)
-        driver.refresh()
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*')))
+        return True
     except (NoSuchElementException, TimeoutException) as e:
-        logging.error(f"Ошибка при обработке пользователя {row['фио']}: {e}")
+        logging.error(f"Ошибка при начислении бонуса: {e}")
         return False
 
 
-def process_penalty(driver, row) -> None:
+def apply_penalty(driver, row) -> bool:
     """Запускает процесс обработки штрафов."""
-    search_field = driver.find_element(By.XPATH,
-                                       '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[2]/input')
-    search_field.clear()
-    search_field.send_keys(row['фио'])
-    time.sleep(1)
-
-    user_item = driver.find_element(By.XPATH,
-                                    '//div[contains(@class, "user_item") and @style="display: table-row;"]')
-    user_item.find_element(By.TAG_NAME, 'a').click()
-
-    time.sleep(1)
-
-    button_change_kiberons = driver.find_element(By.XPATH,
-                                                 '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[1]/div[1]/span/span')
-    button_change_kiberons.click()
-    select1 = Select(
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_sign_id"))))
-    select1.select_by_visible_text("Списание")
-    field_comment = driver.find_element(By.ID, "fc_field_comment_id")
-    field_comment.clear()
-    field_comment.send_keys("Замечания по поведению")
-    time.sleep(0.3)
-    field_amount = driver.find_element(By.ID, "fc_field_amount_id")
-    field_amount.clear()
-    field_amount.send_keys(int(row['штраф']))
-    save_button = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "sendsave")))
-    save_button.click()
-
-    logging.info(f"Штрафы успешно начислены для пользователя: {row['фио']}")
-    update_status(f"Штрафы успешно начислены для пользователя: {row['фио']}")
-
-    time.sleep(1)
-    driver.back()
-    time.sleep(2)
-    driver.refresh()
+    try:
+        button_change_kiberons = driver.find_element(By.XPATH,
+                                                     '/html/body/div[1]/div/div/div/div/div[2]/div[2]/div/div/div[1]/div[1]/span/span')
+        button_change_kiberons.click()
+        select1 = Select(
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "fc_field_sign_id"))))
+        select1.select_by_visible_text("Списание")
+        field_comment = driver.find_element(By.ID, "fc_field_comment_id")
+        field_comment.clear()
+        field_comment.send_keys("Замечания по поведению")
+        field_amount = driver.find_element(By.ID, "fc_field_amount_id")
+        field_amount.clear()
+        field_amount.send_keys(int(row['штраф']))
+        save_button = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "sendsave")))
+        save_button.click()
+        return True
+    except (NoSuchElementException, TimeoutException) as e:
+        logging.error(f"Ошибка при взыскании штрафа: {e}")
+        return False
 
 
 def start_processing() -> None:
@@ -364,111 +373,133 @@ def start_processing() -> None:
 
         for index, row in df.iterrows():
             if pd.notna(row["фио"]):
-                try:
-                    kiberones_value: float = float(row["активность"])
-                    if kiberones_value > 0:
-                        logging.info(f"Начинается начисление киберонов для пользователя: {row['фио']}")
-                        update_status(f"Начинается начисление киберонов для пользователя: {row['фио']}")
-                        if activity_bonus(driver, row):
-                            df.at[index, "активность"] = None
-                            google_sheet.save_data_to_google_sheet(df)
-                            time.sleep(2)
+                if pd.notna(row["активность"]):
+                    try:
+                        kiberones_value: float = float(row["активность"])
+                        if kiberones_value > 0:
+                            logging.info(f"Начинается начисление киберонов для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление киберонов для пользователя: {row['фио']}")
+                            if activity_bonus(driver, row):
+                                df.at[index, "активность"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать пользователя: {row['фио']}")
                         else:
-                            logging.warning(f"Не удалось обработать пользователя: {row['фио']}")
-                            update_status(f"Не удалось обработать пользователя: {row['фио']}")
-                    else:
-                        logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными киберонами.")
-                except ValueError:
-                    logging.warning(f"Неверное значение киберонов для пользователя {row['фио']}: {row['активность']}")
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными киберонами.")
+                    except ValueError:
+                        logging.warning(
+                            f"Неверное значение киберонов для пользователя {row['фио']}: {row['активность']}")
+                        update_status(f"Неверное значение киберонов для пользователя {row['фио']}: {row['активность']}")
+
+                if pd.notna(row["штраф"]):
+                    try:
+                        penalty_value: float = float(row["штраф"])
+                        if penalty_value > 0:
+                            logging.info(f"Начинается начисление штрафа для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление штрафа для пользователя: {row['фио']}")
+                            if process_penalty(driver, row):
+                                df.at[index, "штраф"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось штраф обработать пользователя: {row['фио']}")
+                                update_status(f"Не удалось штраф обработать пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными штрафами.")
+                    except ValueError:
+                        logging.warning(f"Неверное значение штрафа для пользователя {row['фио']}: {row['штраф']}")
+                else:
+                    logging.info(f"Пропущена строка: штраф отсутствует (штраф: {row.get('штраф', 'пусто')})")
+                    update_status(f"Пропущена строка: штраф отсутствует (штраф: {row.get('штраф', 'пусто')})")
+
+                if pd.notna(row["дз"]):
+                    try:
+                        homework_value: float = float(row["дз"])
+                        if homework_value > 0:
+                            logging.info(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 5):
+                                df.at[index, "дз"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление за ДЗ пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление за ДЗ пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными ДЗ.")
+                    except ValueError:
+                        logging.warning(f"Неверное значение ДЗ для пользователя {row['фио']}: {row['дз']}")
+                else:
+                    logging.info(f"Пропущена строка: ДЗ отсутствует (ДЗ: {row.get('дз', 'пусто')})")
+                    update_status(f"Пропущена строка: ДЗ отсутствует (ДЗ: {row.get('дз', 'пусто')})")
+
+                if pd.notna(row["др"]):
+                    try:
+                        homework_value: float = float(row["др"])
+                        if homework_value > 0:
+                            logging.info(f"Начинается начисление за ДР для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление за ДР для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 6):
+                                df.at[index, "др"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление за ДР пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление за ДР пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными ДЗ.")
+                    except ValueError:
+                        logging.warning(f"Неверное значение ДР для пользователя {row['фио']}: {row['др']}")
+                else:
+                    logging.info(f"Пропущена строка: ДР отсутствует (ДР: {row.get('др', 'пусто')})")
+                    update_status(f"Пропущена строка: ДР отсутствует (ДР: {row.get('др', 'пусто')})")
+
+                if pd.notna(row["бонус пропуск"]):
+                    try:
+                        no_skip_value: str = str(row["бонус пропуск"])
+                        if no_skip_value == "да":
+                            logging.info(
+                                f"Начинается начисление бонуса за модуль без пропуска для пользователя: {row['фио']}")
+                            update_status(
+                                f"Начинается начисление бонуса за модуль без пропуска для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 7):
+                                df.at[index, "бонус пропуск"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление бонуса за модуль без пропуска пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление бонуса за модуль без пропуска пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными бонусами.")
+                    except ValueError:
+                        logging.warning(
+                            f"Неверное значение бонуса для пользователя {row['фио']}: {row['бонус пропуск']}")
+                else:
+                    logging.info(f"Пропущена строка: бонус отсутствует (бонус: {row.get('бонус пропуск', 'пусто')})")
+                    update_status(f"Пропущена строка: бонус отсутствует (бонус: {row.get('бонус пропуск', 'пусто')})")
+
+                if pd.notna(row["бонус поведение"]):
+                    try:
+                        no_penalty_value: str = str(row["бонус поведение"])
+                        if no_penalty_value == "да":
+                            logging.info(
+                                f"Начинается начисление бонуса за модуль без замечаний по поведению для пользователя: {row['фио']}")
+                            update_status(
+                                f"Начинается начисление бонуса за модуль без замечаний по поведению для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 8):
+                                df.at[index, "бонус поведение"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление бонуса за модуль без замечаний по поведению пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление бонуса за модуль без замечаний по поведению пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными бонусами.")
+                    except ValueError:
+                        logging.warning(
+                            f"Неверное значение бонуса для пользователя {row['фио']}: {row['бонус поведение']}")
+                else:
+                    logging.info(f"Пропущена строка: бонус отсутствует (бонус: {row.get('бонус поведение', 'пусто')})")
+                    update_status(f"Пропущена строка: бонус отсутствует (бонус: {row.get('бонус поведение', 'пусто')})")
             else:
                 logging.info(f"Пропущена строка: ФИО отсутствует (ФИО: {row.get('фио', 'пусто')})")
-
-            if pd.notna(row["дз"]):
-                try:
-                    homework_value: float = float(row["дз"])
-                    if homework_value > 0:
-                        logging.info(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
-                        update_status(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
-                        other_bonus(driver, row, 5)
-                        df.at[index, "дз"] = None
-                        google_sheet.save_data_to_google_sheet(df)
-                        time.sleep(2)
-                    else:
-                        logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными ДЗ.")
-                except ValueError:
-                    logging.warning(f"Неверное значение ДЗ для пользователя {row['фио']}: {row['дз']}")
-            else:
-                logging.info(f"Пропущена строка: ДЗ отсутствует (ДЗ: {row.get('дз', 'пусто')})")
-
-            if pd.notna(row["др"]):
-                try:
-                    homework_value: float = float(row["др"])
-                    if homework_value > 0:
-                        logging.info(f"Начинается начисление за ДР для пользователя: {row['фио']}")
-                        update_status(f"Начинается начисление за ДР для пользователя: {row['фио']}")
-                        other_bonus(driver, row, 6)
-                        df.at[index, "др"] = None
-                        google_sheet.save_data_to_google_sheet(df)
-                        time.sleep(2)
-                    else:
-                        logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными ДЗ.")
-                except ValueError:
-                    logging.warning(f"Неверное значение ДР для пользователя {row['фио']}: {row['др']}")
-            else:
-                logging.info(f"Пропущена строка: ДР отсутствует (ДР: {row.get('др', 'пусто')})")
-
-            if pd.notna(row["бонус пропуск"]):
-                try:
-                    no_skip_value: str = str(row["бонус пропуск"])
-                    if no_skip_value == "да":
-                        logging.info(f"Начинается начисление бонуса за модуль без пропуска для пользователя: {row['фио']}")
-                        update_status(f"Начинается начисление бонуса за модуль без пропуска для пользователя: {row['фио']}")
-                        other_bonus(driver, row, 7)
-                        df.at[index, "бонус пропуск"] = None
-                        google_sheet.save_data_to_google_sheet(df)
-                        time.sleep(2)
-                    else:
-                        logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными бонусами.")
-                except ValueError:
-                    logging.warning(f"Неверное значение бонуса для пользователя {row['фио']}: {row['бонус пропуск']}")
-            else:
-                logging.info(f"Пропущена строка: бонус отсутствует (бонус: {row.get('бонус пропуск', 'пусто')})")
-
-
-            if pd.notna(row["бонус поведение"]):
-                try:
-                    no_penalty_value: str = str(row["бонус поведение"])
-                    if no_penalty_value == "да":
-                        logging.info(f"Начинается начисление бонуса за модуль без замечаний по поведению для пользователя: {row['фио']}")
-                        update_status(f"Начинается начисление бонуса за модуль без замечаний по поведению для пользователя: {row['фио']}")
-                        other_bonus(driver, row, 8)
-                        df.at[index, "бонус поведение"] = None
-                        google_sheet.save_data_to_google_sheet(df)
-                        time.sleep(2)
-                    else:
-                        logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными бонусами.")
-                except ValueError:
-                    logging.warning(f"Неверное значение бонуса для пользователя {row['фио']}: {row['бонус поведение']}")
-            else:
-                logging.info(f"Пропущена строка: бонус отсутствует (бонус: {row.get('бонус поведение', 'пусто')})")
-
-            # взыскание (штраф) работает немного иначем, чем начисление бонусов и активности
-            if pd.notna(row["штраф"]):
-                try:
-                    penalty_value: float = float(row["штраф"])
-                    if penalty_value > 0:
-                        logging.info(f"Начинается начисление штрафа для пользователя: {row['фио']}")
-                        update_status(f"Начинается начисление штрафа для пользователя: {row['фио']}")
-                        process_penalty(driver, row)
-                        df.at[index, "штраф"] = None
-                        google_sheet.save_data_to_google_sheet(df)
-                        time.sleep(2)
-                    else:
-                        logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными штрафами.")
-                except ValueError:
-                    logging.warning(f"Неверное значение штрафа для пользователя {row['фио']}: {row['штраф']}")
-            else:
-                logging.info(f"Пропущена строка: штраф отсутствует (штраф: {row.get('штраф', 'пусто')})")
+                update_status(f"Пропущена строка: ФИО отсутствует (ФИО: {row.get('фио', 'пусто')})")
 
         if df is not None:
             google_sheet.save_data_to_google_sheet(df)
