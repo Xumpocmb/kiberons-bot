@@ -457,8 +457,8 @@ def start_processing() -> None:
 
                 if pd.notna(row["др"]):
                     try:
-                        homework_value: float = float(row["др"])
-                        if homework_value > 0:
+                        birthday_value: str = str(row["др"])
+                        if birthday_value == "да":
                             logging.info(f"Начинается начисление за ДР для пользователя: {row['фио']}")
                             update_status(f"Начинается начисление за ДР для пользователя: {row['фио']}")
                             if other_bonus(driver, row, 6):
