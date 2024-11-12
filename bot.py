@@ -401,7 +401,7 @@ def start_processing() -> None:
                         if sport_value == "да":
                             logging.info(f"Начинается начисление за разминку для пользователя: {row['фио']}")
                             update_status(f"Начинается начисление за разминку для пользователя: {row['фио']}")
-                            if other_bonus(driver, row, 9):
+                            if other_bonus(driver, row, 8):
                                 df.at[index, "разминка"] = None
                                 google_sheet.save_data_to_google_sheet(df)
                             else:
@@ -441,7 +441,7 @@ def start_processing() -> None:
                         if homework_value > 0:
                             logging.info(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
                             update_status(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
-                            if other_bonus(driver, row, 5):
+                            if other_bonus(driver, row, 10):
                                 df.at[index, "дз"] = None
                                 google_sheet.save_data_to_google_sheet(df)
                             else:
@@ -461,7 +461,7 @@ def start_processing() -> None:
                         if birthday_value == "да":
                             logging.info(f"Начинается начисление за ДР для пользователя: {row['фио']}")
                             update_status(f"Начинается начисление за ДР для пользователя: {row['фио']}")
-                            if other_bonus(driver, row, 6):
+                            if other_bonus(driver, row, 14):
                                 df.at[index, "др"] = None
                                 google_sheet.save_data_to_google_sheet(df)
                             else:
@@ -483,7 +483,7 @@ def start_processing() -> None:
                                 f"Начинается начисление бонуса за модуль без пропуска для пользователя: {row['фио']}")
                             update_status(
                                 f"Начинается начисление бонуса за модуль без пропуска для пользователя: {row['фио']}")
-                            if other_bonus(driver, row, 7):
+                            if other_bonus(driver, row, 5):
                                 df.at[index, "бонус пропуск"] = None
                                 google_sheet.save_data_to_google_sheet(df)
                             else:
@@ -506,7 +506,7 @@ def start_processing() -> None:
                                 f"Начинается начисление бонуса за модуль без замечаний по поведению для пользователя: {row['фио']}")
                             update_status(
                                 f"Начинается начисление бонуса за модуль без замечаний по поведению для пользователя: {row['фио']}")
-                            if other_bonus(driver, row, 8):
+                            if other_bonus(driver, row, 2):
                                 df.at[index, "бонус поведение"] = None
                                 google_sheet.save_data_to_google_sheet(df)
                             else:
