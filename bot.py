@@ -422,7 +422,7 @@ def start_processing() -> None:
                             logging.info(f"Начинается начисление за оплату для пользователя: {row['фио']}")
                             update_status(f"Начинается начисление за оплату для пользователя: {row['фио']}")
                             if other_bonus(driver, row, 15):
-                                df.at[index, "разминка"] = None
+                                df.at[index, "оплата"] = None
                                 google_sheet.save_data_to_google_sheet(df)
                             else:
                                 logging.warning(f"Не удалось обработать начисление за оплату пользователя: {row['фио']}")
