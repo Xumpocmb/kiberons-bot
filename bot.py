@@ -240,7 +240,7 @@ def activity_bonus(driver, row) -> bool:
         if find_and_open_user(driver, row):
             iter_count = row['активность'] // 5
             for _ in range(iter_count):
-                apply_bonus(driver, 4)
+                apply_bonus(driver, 1)
             logging.info(f"Кибероны успешно начислены для пользователя: {row['фио']}")
             update_status(f"Кибероны успешно начислены для пользователя: {row['фио']}")
             driver.back()
@@ -415,6 +415,26 @@ def start_processing() -> None:
                     logging.info(f"Пропущена строка: разминка отсутствует (разминку: {row.get('разминка', 'пусто')})")
                     update_status(f"Пропущена строка: разминка отсутствует (разминка: {row.get('разминка', 'пусто')})")
 
+                if pd.notna(row["оплата"]):
+                    try:
+                        sport_value: str = str(row["оплата"])
+                        if sport_value == "да":
+                            logging.info(f"Начинается начисление за оплату для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление за оплату для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 15):
+                                df.at[index, "оплата"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление за оплату пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление за оплату пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными оплата.")
+                    except ValueError:
+                        logging.warning(f"Неверное значение оплата для пользователя {row['фио']}: {row['оплата']}")
+                else:
+                    logging.info(f"Пропущена строка: оплата отсутствует (оплату: {row.get('оплата', 'пусто')})")
+                    update_status(f"Пропущена строка: оплата отсутствует (оплата: {row.get('оплата', 'пусто')})")
+
                 if pd.notna(row["штраф"]):
                     try:
                         penalty_value: float = float(row["штраф"])
@@ -437,8 +457,8 @@ def start_processing() -> None:
 
                 if pd.notna(row["дз"]):
                     try:
-                        homework_value: float = float(row["дз"])
-                        if homework_value > 0:
+                        homework_value: str = str(row["дз"])
+                        if homework_value == "да":
                             logging.info(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
                             update_status(f"Начинается начисление за ДЗ для пользователя: {row['фио']}")
                             if other_bonus(driver, row, 10):
