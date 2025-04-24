@@ -368,8 +368,9 @@ def start_processing() -> None:
         if not login_to_site(driver, login, password):
             return
 
-        driver.find_element(By.XPATH, '/html/body/div[1]/div/div/div/div/div[1]/div/div[2]/div[1]/a').click()
-        time.sleep(3)
+        link = driver.find_element(By.LINK_TEXT, 'Пользователи')
+        link.click()
+        time.sleep(1)
 
         for index, row in df.iterrows():
             if pd.notna(row["фио"]):
