@@ -238,7 +238,7 @@ def activity_bonus(driver, row) -> bool:
     """Обрабатывает пользователя в таблице."""
     try:
         if find_and_open_user(driver, row):
-            iter_count = row['активность'] // 5
+            iter_count = row['конкурсы-активность'] // 5
             for _ in range(iter_count):
                 apply_bonus(driver, 1)
             logging.info(f"Кибероны успешно начислены для пользователя: {row['фио']}")
@@ -374,14 +374,14 @@ def start_processing() -> None:
 
         for index, row in df.iterrows():
             if pd.notna(row["фио"]):
-                if pd.notna(row["активность"]):
+                if pd.notna(row["конкурсы-активность"]):
                     try:
-                        kiberones_value: float = float(row["активность"])
+                        kiberones_value: float = float(row["конкурсы-активность"])
                         if kiberones_value > 0:
                             logging.info(f"Начинается начисление киберонов для пользователя: {row['фио']}")
                             update_status(f"Начинается начисление киберонов для пользователя: {row['фио']}")
                             if activity_bonus(driver, row):
-                                df.at[index, "активность"] = None
+                                df.at[index, "конкурсы-активность"] = None
                                 google_sheet.save_data_to_google_sheet(df)
                             else:
                                 logging.warning(f"Не удалось обработать пользователя: {row['фио']}")
@@ -390,11 +390,75 @@ def start_processing() -> None:
                             logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными киберонами.")
                     except ValueError:
                         logging.warning(
-                            f"Неверное значение киберонов для пользователя {row['фио']}: {row['активность']}")
-                        update_status(f"Неверное значение киберонов для пользователя {row['фио']}: {row['активность']}")
+                            f"Неверное значение киберонов для пользователя {row['фио']}: {row['конкурсы-активность']}")
+                        update_status(f"Неверное значение киберонов для пользователя {row['фио']}: {row['конкурсы-активность']}")
                 else:
                     logging.info(f"Пропуск пользователя {row['фио']} с отсутствующими киберонами.")
                     update_status(f"Пропуск пользователя {row['фио']} с отсутствующими киберонами.")
+
+
+                if pd.notna(row["посещение"]):
+                    try:
+                        cell_value: str = str(row["посещение"])
+                        if cell_value == "да":
+                            logging.info(f"Начинается начисление за посещение для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление за посещение для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 16):
+                                df.at[index, "посещение"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление за посещение пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление за посещение пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными посещение.")
+                    except ValueError:
+                        logging.warning(f"Неверное значение посещение для пользователя {row['фио']}: {row['посещение']}")
+                else:
+                    logging.info(f"Пропущена строка: посещение отсутствует (посещение: {row.get('посещение', 'пусто')})")
+                    update_status(f"Пропущена строка: посещение отсутствует (посещение: {row.get('посещение', 'пусто')})")
+
+
+                if pd.notna(row["быстрота"]):
+                    try:
+                        cell_value: str = str(row["быстрота"])
+                        if cell_value == "да":
+                            logging.info(f"Начинается начисление за быстрота для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление за быстрота для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 1):
+                                df.at[index, "быстрота"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление за быстрота пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление за быстрота пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными быстрота.")
+                    except ValueError:
+                        logging.warning(f"Неверное значение быстрота для пользователя {row['фио']}: {row['быстрота']}")
+                else:
+                    logging.info(f"Пропущена строка: быстрота отсутствует (быстрота: {row.get('быстрота', 'пусто')})")
+                    update_status(f"Пропущена строка: быстрота отсутствует (быстрота: {row.get('быстрота', 'пусто')})")
+
+
+                if pd.notna(row["помощьдругу"]):
+                    try:
+                        cell_value: str = str(row["помощьдругу"])
+                        if cell_value == "да":
+                            logging.info(f"Начинается начисление за помощьдругу для пользователя: {row['фио']}")
+                            update_status(f"Начинается начисление за помощьдругу для пользователя: {row['фио']}")
+                            if other_bonus(driver, row, 4):
+                                df.at[index, "помощьдругу"] = None
+                                google_sheet.save_data_to_google_sheet(df)
+                            else:
+                                logging.warning(f"Не удалось обработать начисление за помощьдругу пользователя: {row['фио']}")
+                                update_status(f"Не удалось обработать начисление за помощьдругу пользователя: {row['фио']}")
+                        else:
+                            logging.info(f"Пропуск пользователя {row['фио']} с нулевыми или отрицательными помощьдругу.")
+                    except ValueError:
+                        logging.warning(f"Неверное значение помощьдругу для пользователя {row['фио']}: {row['помощьдругу']}")
+                else:
+                    logging.info(f"Пропущена строка: помощьдругу отсутствует (помощьдругу: {row.get('помощьдругу', 'пусто')})")
+                    update_status(f"Пропущена строка: помощьдругу отсутствует (помощьдругу: {row.get('помощьдругу', 'пусто')})")
+
 
                 if pd.notna(row["разминка"]):
                     try:
