@@ -1,8 +1,13 @@
 /credentials.json
 /.venv/
-/chromedriver-win64/
+chromedriver-win64/
+chromedriver-linux64/
 .idea/
 *.pyc
 *.xlsx
 /google-credentials.json
 /output/
+venv/
+.pylintrc
+.vscode/
+settings.json

@@ -20,7 +20,7 @@ logging.basicConfig(
     format='%(levelname)s - %(lineno)d - %(message)s'
 )
 
-CREDENTIALS_FILE = 'credentials.json'
+CREDENTIALS_FILE = "credentials.json"
 
 
 class GoogleSheet:
